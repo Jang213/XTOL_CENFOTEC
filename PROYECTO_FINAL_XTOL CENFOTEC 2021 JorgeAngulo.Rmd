@@ -1,0 +1,1214 @@
+---
+title: "**Proyecto Final XTOL CENFOTEC 2021 **"
+subtitle: "**Data Analytics & Big Data **"
+author: "Jorge Angulo Brenes"
+date: "Mayo 2022"
+output: 
+  html_document:
+    fig_caption: yes
+    df_print: paged
+    theme: lumen #default, cerulean, Xjournal, Xflatly, readable, spacelab, united, cosmo, lumen, paper, Xsandstone, xsimplex, yeti
+    highlight: haddock #default, tango, pygments, kate, monochrome, espresso, Xzenburn, haddock, and textmate
+    toc: true 
+    toc_depth: 4
+    toc_float: true
+    number_sections: false
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+
+# **1 Antecedentes de los Datos**
+
+Estos datos "Adult Data Set" fueron extraídos de la base de datos de la oficina del censo que se encuentra disponible en "http://www.census.gov/ftp/pub/DES/www/welcome.html", consta de 48842 instancias, mezcla de continuo y discreto.
+
+La extracción fue realizada por Barry Becker de la base de datos del censo de 1994 utilizando las siguientes condiciones((AAGE>16) && (AGI>100) && (AFNLWGT>1)&& (HRSWK>0)).
+
+
+
+
+# **2 Comprensión del negocio**
+## 2.1 Objetivos del negocio
+
+### 2.1.1 Objetivo General
+
+Construir un modelo predictivo capaz de identificar si una persona gana más de $50k al año con el fin de desarrollar estrategias comerciales digidas a segmentos de alto perfil.
+
+
+### 2.1.2 Objetivos Específicos
+
+  -	Generar un modelo predictivo capaz de determinar si una persona gana más de $50k al año.
+
+  -	Identificar cuáles son las variables con mayor peso en la predicción de las personas que ganan más de $50k al año.
+
+
+  
+
+# **3 Análisis Exploratorio**
+
+### 3.1 Librerias
+
+```{r, warning=FALSE, message=FALSE}
+library(openxlsx)
+library(readr)
+library(readxl)
+library(tidyverse)
+library(dplyr)
+library(lubridate)
+library(utils)
+library(DT)
+library(scales)
+library(randomForest)
+library(summarytools)
+library(rlang)
+library(ggplot2)
+library(caret)
+```
+
+
+### 3.2 Carga de los Datos
+
+```{r}
+df <- read.csv("C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/Adult Data Set(unificada) v2.csv")
+```
+
+
+
+
+### 3.3 Estructura del DataSet "Adult Data Set"
+
+```{r}
+#view(dfSummary(df))
+str(df)
+```
+
+
+- El dataset inicial consta de 48,842 observaciones y 15 variables.
+
+
+```{r}
+df$education_num <- as.factor(df$education_num)
+str(df)
+```
+
+ - Se transforma la variable "education_num" a Factor por ser una variable categorica a pesar de estar representada por numeros.
+
+
+### 3.4 Busqueda de Valores Perdidos
+
+```{r}
+sum(is.na(df))
+```
+
+```{r}
+apply(is.na(df), 2, sum)
+```
+
+- Se lograin identificar valores perdidos en las variablles "workclass", "ocupation" y "native_country".
+
+
+
+```{r}
+# Eliminamos valores perdidos
+df <- na.omit(df)
+sum(is.na(df))
+str(df)
+```
+
+- Por el tamaño del dataset, se toma la desición de eliminar los valores perdidos, pasando de 48,842 observaciones a 45,222.
+
+
+```{r}
+#view(dfSummary(df))
+```
+
+- Catalogo Education
+
+```{r}
+education_catalog <- select(df, education, education_num) %>% filter (! duplicated(education_num))
+education_catalog <- education_catalog[order(education_catalog$education_num), ]
+education_catalog
+```
+
+- se generó un catalogo para lograr identificar el numero asociado para cada nivel educativo.
+
+
+
+
+
+# **4 Análisis Descriptivo de las Variables**
+### - Variable respuesta "Ingreso_.50K"
+
+```{r}
+ggplot(df, aes(x=Ingreso_.50K))+
+  geom_bar(stat="count", fill="paleturquoise3", width = 0.40) +
+  theme_minimal()+
+  geom_text(stat='count', aes(label=..count..), vjust=-0.5)+
+  ggtitle("Cantidad de Personas por Ingreso <,> 50k)")+
+  theme(plot.title = element_text(hjust = 0.5, size=rel(1.5), color="darkcyan",face="bold"))
+```
+
+- La cantidad de personas que ganan <= 50k es poco más de tres veces que la que ganan >= 50k.
+
+
+### - Variable Edad
+
+```{r}
+ggplot(df, aes(x=Age))+
+  geom_bar(stat="count", fill="aquamarine3") +
+  theme_minimal()+
+  #geom_text(stat='count', aes(label=..count..), vjust=-0.5)+
+  ggtitle("Cantidad de Personas por Edad")+
+  theme(plot.title = element_text(hjust = 0.5, size=rel(1.5), color="darkcyan",face="bold"))
+```
+
+```{r}
+mean(df$Age)
+```
+
+
+
+- En la distribución de cantidad de personas por Edad, se puede que de las personas censadas la mayor cantidad de personas esta entre los 20 y 45 y se presenta una edad promedio de 38 años.
+
+
+
+
+
+### - Variable workclass
+
+```{r}
+ggplot(df, aes(x=workclass))+
+  geom_bar(stat="count", fill="paleturquoise3") +
+  theme_minimal()+
+  geom_text(stat='count', aes(label=..count..), vjust=-0.5)+
+  ggtitle("Cantidad de Personas por Tipo de Trabajo")+
+  theme(plot.title = element_text(hjust = 0.5, size=rel(1.5), color="darkcyan",face="bold"))
+```
+
+- Se puede observar que la mayor parte de las personas censadas trabaja en el serctor privado.
+
+
+
+
+### - Variable fnlwgt (final weight)
+
+- Variable numérica que representa un peso, cada peso corresponde a una característica socio-económica de la población, por tanto, personas con características demográficas parecidas deben tener un peso parecido. [@fnlwgt]
+
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+ggplot(df, aes(x=education_num, y=fnlwgt, fill = education_num)) +
+  geom_boxplot() + 
+ggtitle("Cantidad de Personas por fnlwgt (final weight) y Education")
+
+education_catalog
+
+```
+
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/0_boxplot fnlwgt.png){width=80%}
+
+- Se puede observar gran cantidad de valores atipicos en la mayoria de los niveles educativos.
+
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/0_education_catalog.png){width=50%}
+
+
+
+### - Variable Education
+
+
+```{r}
+ggplot(df, aes(x=education_num))+
+  geom_bar(stat="count", fill="paleturquoise3") +
+  theme_minimal()+
+  geom_text(stat='count', aes(label=..count..), vjust=-0.5)+
+  ggtitle("Cantidad de Personas por Nivel de Estudios")+
+  theme(plot.title = element_text(hjust = 0.5, size=rel(1.5), color="darkcyan",face="bold"))
+
+education_catalog
+```
+
+
+- Los niveles educativos de la población censada son principalmente:
+  * 9 = HS-grad
+  * 10 = Some-college
+  * 13 = Bachelors
+
+
+
+### - Variable marital_status
+
+    * _Married-civ-spouse_: la persona está casada con un civil.
+    
+    * _Divorced_: la persona está divorciada.
+    
+    * _Never-married_: la persona nunca ha estado casada.
+    
+    * _Separated_: la persona está separada.
+    
+    * _Widowed_: la persona es viuda.
+    
+    * _Married-spouse-absent_: la persona aparece como casada en el registro, pero no se encuentra a ninguna pareja [@maritalstatus].
+    
+    * _Married-AF-spouse_: la persona está casada con alguien de las fuerzas armadas.
+
+
+```{r}
+ggplot(df, aes(x=marital_status))+
+  geom_bar(stat="count", fill="paleturquoise3") +
+  theme_minimal()+
+  geom_text(stat='count', aes(label=..count..), vjust=-0.2)+
+  ggtitle("Cantidad de Personas por Nivel de Estudios")+
+  theme(plot.title = element_text(hjust = 0.5, size=rel(1.5), color="darkcyan",face="bold"), axis.text.x = element_text(angle = 45, hjust=0.8))
+
+```
+
+
+- De la población censada la mayor parte ellos estan casados con un civil o nunca han estado casados. 
+
+
+
+
+### - Variable occupation
+
+```{r}
+ggplot(df, aes(x=occupation))+
+  geom_bar(stat="count", fill="paleturquoise3") +
+  theme_minimal()+
+  geom_text(stat='count', aes(label=..count..), vjust=-0.2)+
+  ggtitle("Cantidad de Personas por Ocupación")+
+  theme(plot.title = element_text(hjust = 0.5, size=rel(1.5), color="darkcyan",face="bold"), axis.text.x = element_text(angle = 45, hjust=0.8))
+
+```
+
+- Se puede observar 6 tipos de ocupación predominantes.
+
+
+
+### - Variable relationship
+
+
+* Variable que contiene el valor que puede tomar la relación de una persona con respecto a otra dentro de una familia. Contiene solo un valor por instancia del dato. Estos valores pueden ser _Wife_ (Esposa), _Own-child_ (hijo propio), _Husband_ (marido), _Not-in-family_ (sin familia), _Other-relative_ (otro tipo de familiar) y _Unmarried_ (soltero)
+
+```{r}
+ggplot(df, aes(x=relationship))+
+  geom_bar(stat="count", fill="paleturquoise3") +
+  theme_minimal()+
+  geom_text(stat='count', aes(label=..count..), vjust=-0.2)+
+  ggtitle("Cantidad de Personas por Relationshiop")+
+  theme(plot.title = element_text(hjust = 0.5, size=rel(1.5), color="darkcyan",face="bold"), axis.text.x = element_text(angle = 45, hjust=0.8))
+
+```
+
+
+
+
+### - Variable race
+
+```{r}
+ggplot(df, aes(x=race))+
+  geom_bar(stat="count", fill="paleturquoise3") +
+  theme_minimal()+
+  geom_text(stat='count', aes(label=..count..), vjust=-0.2)+
+  ggtitle("Cantidad de Personas por Race")+
+  theme(plot.title = element_text(hjust = 0.5, size=rel(1.5), color="darkcyan",face="bold"), axis.text.x = element_text(angle = 45, hjust=0.8))
+
+```
+
+- El 86% de las personas censadas son de raza blanca.
+
+
+### - Variable sex
+
+```{r}
+ggplot(df, aes(x=sex))+
+  geom_bar(stat="count", fill="paleturquoise3",width = 0.40) +
+  theme_minimal()+
+  geom_text(stat='count', aes(label=..count..), vjust=-0.2)+
+  ggtitle("Cantidad de Personas por Sexo")+
+  theme(plot.title = element_text(hjust = 0.5, size=rel(1.5), color="darkcyan",face="bold"), axis.text.x = element_text(angle = 45, hjust=0.8))
+
+```
+
+- La cantidad de hombres censados es mas del doble que el de las mujeres.
+
+
+### - Variable capital_gain
+
+```{r}
+ggplot(df, aes(x=capital_gain))+
+  geom_point(stat="count", fill="aquamarine3") +
+  theme_minimal()+
+  geom_text(stat='count', aes(label=..count..), vjust=-0.5)+
+  ggtitle("Cantidad de Personas por Ganancia de Capital")+
+  theme(plot.title = element_text(hjust = 0.5, size=rel(1.5), color="darkcyan",face="bold"))
+
+
+```
+
+  - El 91.6% de las personas registran 0 en capital_gain.
+
+
+
+### - Variable capital_loss
+
+```{r}
+ggplot(df, aes(x=capital_loss))+
+  geom_bar(stat="count", fill="aquamarine3") +
+  theme_minimal()+
+  geom_text(stat='count', aes(label=..count..), vjust=-0.5)+
+  ggtitle("Cantidad de Personas por Perdida de Capital")+
+  theme(plot.title = element_text(hjust = 0.5, size=rel(1.5), color="darkcyan",face="bold"))
+
+
+```
+
+
+  - El 95% de las personas registran 0 en capital_loss.
+
+
+
+### - Variable hour_per_week
+
+
+```{r}
+ggplot(df, aes(x=hour_per_week))+
+  geom_bar(stat="count", fill="aquamarine3") +
+  theme_minimal()+
+#  geom_text(stat='count', aes(label=..count..), vjust=0, angle = 90)+
+  ggtitle("Cantidad de Personas por hour_per_week")+
+  theme(plot.title = element_text(hjust = 0.5, size=rel(1.5), color="darkcyan",face="bold"))
+
+
+```
+
+```{r}
+median(df$hour_per_week)
+```
+
+- Se puede observar que la mayor parte de la población censada trabaja aproximadamente 40 horas por semana.
+
+
+
+
+### - Variable native_country
+
+```{r}
+df_native_country <- df %>% group_by(native_country)  %>% summarise(n = n())
+
+df_native_country <- df_native_country[order(df_native_country$n,  decreasing = TRUE), ]
+
+df_native_country
+```
+
+- El 91.3%  de las personas son nativas de Estados Unidos. 
+
+
+
+
+### - Cantidad de Personas por Edad y Ingreso_50k
+
+
+```{r, echo=FALSE}
+
+# Edad / Ingreso_50k
+
+ggplot(data = df) +
+  geom_histogram(mapping = aes(x = Age, fill = Ingreso_.50K), bins = 30)+
+  facet_grid(Ingreso_.50K~., scales = "free_y") +
+  scale_fill_manual(values = c("aquamarine3","cadetblue"), name="Ingreso_.50K", labels=c("<=50k", ">50k")) +
+   labs(
+    title = "Cant. Personas por Edad y Ingreso_.50K",
+    subtitle = "Según la edad",
+    x = "Age",
+    y = "Cantidad")
+  
+```
+
+
+- Se puede observar que las personas que ganan <50k tienen a ser de menor edad.
+
+### - Cantidad de Personas por Edad, sexo y Ingreso_50k
+
+
+```{r, echo=FALSE}
+
+# Edad/sex/Ingreso_50k
+
+ggplot(data = df) +
+  geom_histogram(mapping = aes(x = Age, fill = Ingreso_.50K), bins = 30)+
+  facet_grid(Ingreso_.50K ~ sex, scales = "free_y") +
+  scale_fill_manual(values = c("aquamarine3","cadetblue"), name="Ingreso_.50K", labels=c("<=50k", ">50k")) +
+   labs(
+    title = "Cant. Personas por Edad y Ingreso_.50K",
+    subtitle = "Según la edad",
+    x = "Age",
+    y = "Cantidad")
+  
+```
+
+  - Ya se habia identificado que la cantidad de hombres presente en la base es poco mas del doble que el de mujeres. Pero la cantidad de mujeres que ganan > 50k sumamente bajo con respecto a los hombres.
+
+
+
+
+
+# **5 Ingeniería de Variables**
+
+
+### 5.1 Matriz de Correlación
+
+```{r}
+corrData <- cor(df[, c('Age', 'fnlwgt', 'capital_gain', 'capital_loss')])
+print(corrData)
+```
+
+- No se logra observar una correlación significativa entre estas variables.
+
+
+### 5.2 Variación de las Variables
+
+```{r}
+nzv_lm <- nearZeroVar(df, saveMetrics = FALSE) 
+nzv_lm
+```
+
+* Las variables 11, 12 y 14 tienen una variación casi nula
+
+```{r}
+#nearZeroVar() with saveMetrics = TRUE returns an object containing a table including: frequency ratio, percentage unique, zero variance and near zero variance 
+nzvMetrics <- nearZeroVar(df, saveMetrics = TRUE)
+nzvMetrics
+
+```
+
+
+```{r}
+ggplot(nzvMetrics, aes(x=zeroVar))+
+  geom_bar(stat="count", fill="steelblue", width = 0.20) +
+  theme_minimal()+
+  geom_text(stat='count', aes(label=..count..), vjust=-0.5)+
+  ggtitle("Distribución (zeroVar TRUE/FALSE)")+
+  theme(plot.title = element_text(hjust = 0.5, size=rel(1.5), color="darkcyan",face="bold"))
+
+
+ggplot(nzvMetrics, aes(x=nzv))+
+  geom_bar(stat="count", fill="steelblue", width = 0.40) +
+  theme_minimal()+
+  geom_text(stat='count', aes(label=..count..), vjust=-0.5)+
+  ggtitle("Distribución (nzv TRUE/FALSE))")+
+  theme(plot.title = element_text(hjust = 0.5, size=rel(1.5), color="darkcyan",face="bold"))
+
+
+```
+
+
+
+
+### 5.3 Eliminacián de las variables con variación casi nula
+
+```{r}
+# create a new data set and remove near zero variance features
+dfNZV <- df[,-nzv_lm]
+str(dfNZV)
+```
+
+
+
+
+- Recodificación de Variable a Predecir a Binario(>50k= 0  /  <=50k = 1)
+
+```{r}
+
+dfNZV_respaldo <- dfNZV
+
+
+dfNZV$Ingreso_.50K <- as.character(dfNZV$Ingreso_.50K)
+dfNZV$Ingreso_.50K[dfNZV$Ingreso_.50K==">50K"] <- "0"
+dfNZV$Ingreso_.50K[dfNZV$Ingreso_.50K=="<=50K"] <- "1"
+
+dfNZV$Ingreso_.50K <- as.factor(dfNZV$Ingreso_.50K)
+str(dfNZV)
+```
+
+
+### 5.4 Eliminación de Variables Recursivas
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+# Let's sample the data before using RFE
+set.seed(123)
+dfSample <- dfNZV[sample(1:nrow(dfNZV), 1000, replace=FALSE),]
+
+# Set up rfeControl with randomforest, repeated cross validation and no updates
+ctrl <- rfeControl(functions = rfFuncs, 
+                   method = "repeatedcv",
+                   repeats = 5,
+                   verbose = FALSE)
+
+# Use rfe and omit the response variable (attribute 12 Ingreso_.50K) 
+rfeResults <- rfe(dfSample[,1:11], 
+                  dfSample$Ingreso_.50K, 
+                  sizes=(1:11), 
+                  rfeControl=ctrl)
+
+# Get results
+rfeResults
+
+# Plot results
+plot(rfeResults, type=c("g", "o"))
+```
+
+
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/1_rfeResults.png){width=100%}
+
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/2_Plot_results_rfeResults.png){width=80%}
+
+
+- Variables recomendadas
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+rfeResults[["optVariables"]]
+```
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/3_rfeResultsVar.png){width=90%}
+
+
+- Se genera el Dataset con las variables recomendadas
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+# create new data set with rfe recommended features
+dfRFE <- dfNZV[,predictors(rfeResults)]
+
+# add the dependent variable to iphoneRFE
+dfRFE$Ingreso_.50K <- dfNZV$Ingreso_.50K
+
+# review outcome
+str(dfRFE)
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/4_dfRFE.png){width=90%}
+
+ - Luego de crear un nuevo dataset con las variables recomendadas, nos queda una base con 45,222 observaciones y 9 variables.
+
+
+
+# **6 Modelado**
+## **6.1 Generalidades**
+
+### - Selección de técnica de modelado
+
+  Para la selección del metodo predictivo a utilizar se realizó la calibración de los distintos Hiperparametros ajustables para los metodos Random Forest, C5.0, Gradient Boosting y Extreme Gradient Boosting.
+
+
+### - Generación de las Bases para Training y Testing
+
+- **Creamos las bases de Tranning (75%) y Testing (25%)**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+set.seed(998)
+
+inTrain <- createDataPartition(y = dfRFE$Ingreso_.50K,
+## the outcome data are needed
+p = .75,
+## The percentage of data in the
+## training set
+list = FALSE)
+## The format of the results
+```
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+training <- dfRFE[ inTrain,]
+testing <- dfRFE[-inTrain,]
+nrow(training)
+```
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/5_training.png){width=15%}
+
+
+
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+nrow(testing)
+```
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/6_testing.png){width=15%}
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+ggplot(training, aes(x=Ingreso_.50K))+
+  geom_bar(stat="count", fill="steelblue", width = 0.50) +
+  theme_minimal()+
+  geom_text(stat='count', aes(label=..count..), vjust=-0.5)+
+  ggtitle("Distribución TrainingData_Ingreso_.50K")+
+  theme(plot.title = element_text(hjust = 0.5, size=rel(1.5), color="darkcyan",face="bold"))
+
+
+ggplot(testing, aes(x=Ingreso_.50K))+
+  geom_bar(stat="count", fill="steelblue", width = 0.50) +
+  theme_minimal()+
+  geom_text(stat='count', aes(label=..count..), vjust=-0.5)+
+  ggtitle("Distribución TestingData_Ingreso_.50K")+
+  theme(plot.title = element_text(hjust = 0.5, size=rel(1.5), color="darkcyan",face="bold"))
+
+
+
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/7_Distribucion_training.png){width=70%}
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/8_Distribucion_testing.png){width=70%}
+
+
+- **10 fold cross validation**
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+fitControl <- trainControl(method = "repeatedcv", number = 10, repeats = 1)
+```
+
+
+## **6.1 Modelado Parte1**
+
+### - Algoritmo Random Forest Classifier
+
+- **Calibración**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+set.seed(998)
+system.time(rfFit1 <- train(Ingreso_.50K~., data = training, method = "rf", trControl=fitControl, tuneLength = 1))
+rfFit1
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/9_training_CrosVal_RandomF.png){width=70%}
+
+- **Hiperparametros ajustados**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+set.seed(998)
+rfGrid <- expand.grid(mtry=c(14))
+system.time(rfFit1_F <- train(Ingreso_.50K~., data = training, method = "rf", tuneGrid = rfGrid, tuneLength = 1))
+rfFit1_F
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/10_training_RandomF_ajustado.png){width=70%}
+
+- **Testeo de Random Forest**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+rfFit1_pred <- predict(rfFit1_F,
+                       newdata = testing,
+                       type = "raw")
+
+confusionMatrix(rfFit1_pred, testing$Ingreso_.50K)
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/11_testing_RandomF.png){width=45%}
+
+
+### - Algoritmo C5.0
+
+- **Calibración**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+system.time(C50Fit1 <- train(x=training[,c("marital_status","relationship","Age","education","occupation","education_num","hour_per_week","sex")],
+             y=training$Ingreso_.50K,
+             trControl=fitControl,
+             method="C5.0",
+             verbose=FALSE))
+C50Fit1
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/12_training_CrosVal_C50.png){width=70%}
+
+- **Hiperparametros ajustados**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+set.seed(998)
+rfGridC5 <- expand.grid(trials = c(20),
+                      model = "tree",
+                      winnow = FALSE)
+
+system.time(C50Fit1_F <- train(x=training[,c("marital_status","relationship","Age","education","occupation","education_num","hour_per_week","sex")],
+             y=training$Ingreso_.50K,
+             tuneGrid = rfGridC5,
+             method="C5.0",
+             verbose=FALSE))
+C50Fit1_F
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/13_training_C50_ajustado.png){width=70%}
+
+- **Testeo de C5.0**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+C50Fit1_pred <- predict(C50Fit1_F,
+                       newdata = testing,
+                       type = "raw")
+
+confusionMatrix(C50Fit1_pred, testing$Ingreso_.50K)
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/14_testing_C50.png){width=45%}
+
+### - Algoritmo Gradient Boosting 
+
+- **Calibración**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+gbmFit1 <- train(Ingreso_.50K~.,data = training,
+                  method = "gbm", trControl = fitControl,
+                 verbose = FALSE)
+gbmFit1
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/15_training_CrosVal_GradientB.png){width=70%}
+
+- **Hiperparametros ajustados**
+
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+set.seed(998)
+rfGridGBM <- expand.grid(n.trees = c(150),
+                        interaction.depth = c(3),
+                        shrinkage = c(0.1),
+                        n.minobsinnode = c(10)
+                        )
+
+
+system.time(gbmFit1_F <- train(Ingreso_.50K~.,
+                             data = training,
+                             method = "gbm", 
+                             tuneGrid = rfGridGBM,
+                             verbose = FALSE)
+            )
+gbmFit1_F
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/16_training_GradientB_ajustado.png){width=70%}
+
+- **Testeo de Gradient Boosting**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+gbmFit1_F_pred <- predict(gbmFit1_F,
+                       newdata = testing,
+                       type = "raw")
+
+confusionMatrix(gbmFit1_F_pred, testing$Ingreso_.50K)
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/17_testing_GradientB.png){width=45%}
+
+
+### - Algoritmo Extreme Gradient Boosting
+
+
+- **Calibración**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+xgbTreeFit1 <- train(Ingreso_.50K ~., data = training, 
+                     method = "xgbTree", trControl = fitControl)
+xgbTreeFit1
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/18_training_CrosVal_ExtremeGradient.png){width=70%}
+
+
+- **Hiperparametros ajustados**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+set.seed(998)
+rfGridxgb <- expand.grid(nrounds = c(100),
+                        max_depth = c(2),
+                        eta = c(0.3),
+                        gamma = c(0),
+                        colsample_bytree = c(0.8),
+                        min_child_weight = c(1),
+                        subsample  = c(0.75)
+                        )
+
+xgbTreeFit1_F <- train(Ingreso_.50K ~., 
+                     data = training, 
+                     method = "xgbTree", 
+                     tuneGrid = rfGridxgb
+                     )
+xgbTreeFit1_F
+```
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/19_training_ExtremeGradient_ajustado.png){width=70%}
+
+
+- **Testeo de Extreme Gradient Boosting**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+xgbTreeFit1_F_pred <- predict(xgbTreeFit1_F,
+                       newdata = testing,
+                       type = "raw")
+
+confusionMatrix(xgbTreeFit1_F_pred, testing$Ingreso_.50K)
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/20_testing_ExtremeGradient.png){width=45%}
+
+
+## **6.2 Modelado Parte2**
+
+
+### - C5.0, Gradient Boosting y Extreme Gradient Boosting con 12 Variables
+
+  - Se corrieron estos modelos con la base "dfNZV" que tiene 12 variables incluyendo la Variable Respuesta. Esta data es previa a aplicar "Recursive Feature Elimination RFE" para validar el rendimiento de los modelos con las 11 variables predictoras ya que la Hipotesis era que al usar RFE en "Recursive Feature Elimination" nos recomendaba las variables de mejor desempeño pero con RFE sin saber si esas variables se comportarian igual con otros modelos. 
+  
+  
+
+
+- **Creamos las bases de Tranning (75%) y Testing (25%)** "dfNZV"
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+set.seed(998)
+
+inTrain_x <- createDataPartition(y = dfNZV$Ingreso_.50K,
+## the outcome data are needed
+p = .75,
+## The percentage of data in the
+## training_x set
+list = FALSE)
+## The format of the results
+```
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+training_x <- dfNZV[ inTrain_x,]
+testing_x <- dfNZV[-inTrain_x,]
+nrow(training_x)
+nrow(testing_x)
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/21_training_testing_dfNZV.png){width=15%}
+
+
+
+- **10 fold cross validation**
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+fitControl_x <- trainControl(method = "repeatedcv", number = 10, repeats = 1)
+```
+
+
+
+
+
+
+### - Algoritmo C5.0
+
+- **Calibración**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+system.time(C50Fit1_x <- train(x=training_x[,c("Age","workclass","fnlwgt","education","education_num","marital_status","occupation","relationship","race","sex","hour_per_week")],
+             y=training_x$Ingreso_.50K,
+             trControl=fitControl_x,
+             method="C5.0",
+             verbose=FALSE))
+C50Fit1_x
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/22_training_CrosVal_C50_dfNZV.png){width=80%}
+
+- **Hiperparametros ajustados**
+
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+set.seed(998)
+rfGridC5_x <- expand.grid(trials = c(20),
+                      model = "rules",
+                      winnow = FALSE)
+
+system.time(C50Fit1_x_F <- train(x=training_x[,c("Age","workclass","fnlwgt","education","education_num","marital_status","occupation","relationship","race","sex","hour_per_week")],
+             y=training_x$Ingreso_.50K,
+             tuneGrid = rfGridC5_x,
+             method="C5.0",
+             verbose=FALSE))
+C50Fit1_x_F
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/23_training_C50_ajustado_dfZNV.png){width=70%}
+
+- **Testeo de C5.0**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+C50Fit1_x_pred <- predict(C50Fit1_x_F,
+                       newdata = testing_x,
+                       type = "raw")
+
+confusionMatrix(C50Fit1_x_pred, testing_x$Ingreso_.50K)
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/24_testing_C50_dfZNV.png){width=45%}
+
+### - Algoritmo Gradient Boosting
+
+- **Calibración**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+gbmFit1_x <- train(Ingreso_.50K~.,data = training_x,
+                  method = "gbm", trControl = fitControl_x,
+                 verbose = FALSE)
+gbmFit1_x
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/25_training_CrosVal_GradientB_dfZNV.png){width=75%}
+
+- **Hiperparametros ajustados**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+set.seed(998)
+rfGridGBM_x <- expand.grid(n.trees = c(150),
+                        interaction.depth = c(3),
+                        shrinkage = c(0.1),
+                        n.minobsinnode = c(10)
+                        )
+
+
+system.time(gbmFit1_x_F <- train(Ingreso_.50K~.,
+                             data = training_x,
+                             method = "gbm", 
+                             tuneGrid = rfGridGBM_x,
+                             verbose = FALSE)
+            )
+gbmFit1_x_F
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/26_training_GradientB_ajustado_dfZNV.png){width=70%}
+
+- **Testeo de Gradient Boosting**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+gbmFit1_x_F_pred <- predict(gbmFit1_x_F,
+                       newdata = testing_x,
+                       type = "raw")
+
+confusionMatrix(gbmFit1_x_F_pred, testing_x$Ingreso_.50K)
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/27_testing_GradientB_dfZNV.png){width=40%}
+
+
+### - Algoritmo Extreme Gradient boosting
+
+- **Calibración**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+xgbTreeFit1_x <- train(Ingreso_.50K ~., data = training_x, 
+                     method = "xgbTree", trControl = fitControl_x)
+xgbTreeFit1_x
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/28_training_CrosVal_ExtremeGradient_dfZNV.png){width=70%}
+
+- **Hiperparametros ajustados**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+set.seed(998)
+rfGridxgb_x <- expand.grid(nrounds = c(50),
+                        max_depth = c(3),
+                        eta = c(0.3),
+                        gamma = c(0),
+                        colsample_bytree = c(0.8),
+                        min_child_weight = c(1),
+                        subsample  = c(1)
+                        )
+
+xgbTreeFit1_x_F <- train(Ingreso_.50K ~., 
+                     data = training_x, 
+                     method = "xgbTree", 
+                     tuneGrid = rfGridxgb_x
+                     )
+xgbTreeFit1_x_F
+```
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/29_training_ExtremeGradient_ajustado_dfZNV.png){width=70%}
+
+- **Testeo de Extreme Gradient boosting**
+
+```{r, warning=FALSE, message=FALSE, eval=FALSE}
+xgbTreeFit1_x_F_pred <- predict(xgbTreeFit1_x_F,
+                       newdata = testing_x,
+                       type = "raw")
+
+confusionMatrix(xgbTreeFit1_x_F_pred, testing_x$Ingreso_.50K)
+```
+
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/30_testing_ExtremeGradient_dfZNV.png){width=45%}
+
+
+
+
+## **6.3 Resultados de los Modelos**
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/Resultados de Modelos.png){width=80%}
+
+
+<div style="text-align: justify">
+
+  La primera parte de la aplicación de los modelos para realizar la selección del que proporcionara los mejores resultados de acuerdo con las necesitades del negocio, se realizó con la base "dfRFE" que tenia 9 variables (8 predictoras recomendadas por el Analisis de Recursividad con RFE). Este análisis contempló en la configuración de rfeControl  randomforest y validación cruzada.
+  
+  Al utilizar Random Rofest con esta tecnica, se planteó la hipotesis de que las variables recomendas en el Analisis de Recursividad, podian ser efectivamente las que proporcionaron mejores resultados o tienen mayor poder predictivo pero con el Algoritmo Random Forest y que los otros algoritmos podia ser que no se comportaran de la misma forma. Por esta razon, se procedió a experimentar en la Parte 2 de Modelado volviendo a ejecutar los modelos C5.0, Gradient Boosting y Extreme Gradient Boosting con la base que se tenia antes de aplicar el Analisis de Recursividad, esta base "dfNZV" tenia 11 variables predictoras.
+
+![](C:/Data Analytics y Big Data/Modulo 2/Tareas/Tarea 4 (Proyecto Final)/imagenes/bases.png){width=80%}
+
+
+  De acuerdo con las necesidades planteadas por el negocio, para la selección del modelo se tomaran en cuenta las medidas de Exactitud, F1 Score y Coeficiente Kappa de los modelos para la selección final. 
+
+</div>
+
+## **6.4 Selección de Modelo**
+
+  De acuerdo con los resultados Obtenidos:
+<div style="text-align: justify">
+
+  - **A nivel de Exactitud**, los modelos que proporcionaron mejores resultados fueron:
+    * **1° Extreme Gradient Boosting (Modelado Parte2)**
+    * 2° Extreme Gradient boosting (Modelado Parte1)
+    * 3° Gradient Boosting (Modelado Parte1 y 2) y C5.0 (Modelado Parte2)
+
+  - **A nivel de Presición**, los modelos que proporcionaron mejores resultados fueron:
+    * 1° C5.0 (Modelado Parte2)
+    * 2° Gradient Boosting (Modelado Parte2)
+    * 3° Extreme Gradient boosting (Modelado Parte2)
+  
+  - **A nivel de Sensibilidad**, los modelos que proporcionaron mejores resultados fueron:
+    * 1° Random Forest Classifier (Modelado Parte1)
+    * 2° C5.0 (Modelado Parte1)
+    * 3° Extreme Gradient boosting (Modelado Parte2)
+    
+  - **A nivel de F1 Score**, los modelos que proporcionaron mejores resultados fueron:
+    * **1° Extreme Gradient boosting (Modelado Parte2)**
+    * 2° Extreme Gradient boosting (Modelado Parte1)
+    * 3° C5.0 (Modelado Parte1)
+    
+  - **En el Coeficiente kappa**, los modelos que proporcionaron mejores resultados fueron:
+    * **1° Extreme Gradient boosting (Modelado Parte2)**
+    * 2° Extreme Gradient boosting (Modelado Parte1)
+    * 3° Gradient Boosting (Modelado Parte1)
+
+
+  Luego de analizar los resultados de los diferentes modelos tanto en la Parte1 de modelado como en la Parte2 y tomando en cuenta las medidas de Exactitud, F1 Score y coeficiente Kappa, se concluye que:
+  
+  - Con los datos analizados el modelo que proporciona mejores resultados **Extreme Gradient boosting (Modelado Parte2)**
+  - La Base dfNZV con 11 variables predictoras, fue la que proporcionó mayor poder predictivo para el **Extreme Gradient boosting**
+  
+  
+  
+</div>
+
+
+# **7 Observaciones Finales**
+
+<div style="text-align: justify">
+
+   Luego del desarrollo de este proyecto, se pueden señalar las siguientes observaciones:
+
+  * Durante el análisis de las variables se logró identificar a nivel de la variable respuesta (Ingreso_.50K) que la base no es una base balanceada. Este es un punto importante a tomar en cuenta al momento de tratar los datos y analizar los resultados de los modelos para la selección del que mejor se ajuste a las necesidades del negocio.
+  
+  * No se encontraron variables que tuvieran una alta correlación entre sí.
+  
+  * El análisis de variabilidad permitió identificar 3 variables que presentaban una variabilidad cercana a cero, se tomó la decision de no contemplarlas en la fase de modelado.
+  
+  * El análisis de recursividad recomendo trabajar la fase de modelado con una base de 9 varibles (8 predictoras):
+    - marital_status
+    - relationship  
+    - Age           
+    - education     
+    - occupation    
+    - education_num 
+    - hour_per_week 
+    - sex           
+    - Ingreso_.50K  
+
+  
+  * La Parte1 de modelado se trabajo con la base recomendada por el Análisis de Recursividad (8 predictoras).
+  
+  * En la Parte2 de modelado, se probó la Hipotesis de que si el rendimiento de algunos de los modelos podía mejorar utilizando la base con 12 variables (11 predictoras), base anterior al análisis de recursividad, ya que este análsis se desarrollo utilizando el algoritmo RandomForest por lo que su recomendación de variables podia ser optima para ese algoritmo en especifico pero no necesariamente para los otros. 
+  
+  * De acuerdo con los resultados obtenidos, la Hipotesis planteada fue validada. EL análisis de recursividad optimizó el resultado del algoritmo Random Forest recomendando utilizar 8 variables predictoras y los modelos probados dieron buenos resultados con esa base, pero al correr C5.0, Gradient Booting y Extreme Gradient boosting con la base previa al analisis de recursividad (base con 11 variables predictoras), las metricas de los modelos en algunos casos mejoraron levemente.
+  
+  * De acuerdo con los resultados obtenidos en las fases de modelado y por ser la base trabajada una base desbalanceada, las metricas que se tomaron en cuenta para seleccionar el modelo que mejor se ajustaba a las necesidades del negocio fueron Exactitud, F1Score (metrica muy recomendada al trabajar con datos desbalanceados) y el coeficiente kappa.
+  
+    - De acuerdo con lo anterior, el algoritmo que mejores resultados proporcionó en estas 3 metricas fue **Algoritmo Extreme Gradient boosting** con la base de 12 variables (11 predictoras).
+
+  
+  * Se logra obtener un modelo que permite identificar si una persona en posee un ingreso mayor a $50k con:
+    - Una exactitud del 84.38%.
+    - Un F1Score de 65.49%
+    - Un Coeficiente kappa de 0.5552
+
+
+  * De las 14 variables predictoras originales, las que tuvieron mayor peso en los resultados de las predicciones obtenidas fueron las siguientes:
+    - Age     
+    - workclass
+    - fnlwgt
+    - education 
+    - education_num
+    - marital_status
+    - occupation
+    - relationship
+    - race
+    - sex 
+    - hour_per_week
+
+
+</div>
+
+
+# **8 Resumen General del Proyecto**
+
+<div style="text-align: justify">
+
+## **8.1 Problema a Resolver**
+
+Desarrollar un modelo predictivo capaz de identificar si una persona gana más de $50k al año.
+
+## **8.2 Actividades Realizadas**
+
+  Dentro de las actividades desarrolladas para la solución del problema estan las siguientes:
+
+  * Análisis Exploratorio de los datos.
+  
+  * Análisis Descriptivo de las variables.
+  
+  * Ingeniearía de Variables
+  
+    - Análisis de Variabilidad
+    - Análisis de Recursividad
+    
+  * Modelado
+    - Ajuste de Hiperparametros, validación cruzada.
+    - Entrenamiento de los modelos
+    - Testeo de los modelos
+    - Generación de Matrices de Confusión
+    - Análisis de Resultados
+
+
+## **8.3 Resultados de las Actividades Realizadas**
+
+Como resultado final de todas las actividades realizadas, se logra obtener un modelo predictivo que permite identificar si una persona gana más de $50k al año con:
+  
+  - Una exactitud del 84.38%.
+  - Un F1Score de 65.49%
+  - Un Coeficiente kappa de 0.5552
+
+## **8.4 Lecciones Aprendidas**
+
+Dentro de las principales lecciones aprendidas durante el desarrollo de este proyecto y curso en general estan las siguientes:
+
+  - El análisis exploratorio inicial y descriptivo de las variables es de suma importancia al momento de iniciar un proyecto de Analitica de Datos ya que nos permite obtener una idea general de como estan los datos con los que vamos a trabajar, si son datos balanceados o no, las distribuciones generales de las variables, que tan limpios o sucios estan los datos, etc.
+  
+  - Por mas que se pre procese una base de datos, no necesariamente nos va a proporcionar buenos resultados en la fase de modelado, en ocaciones las variables utilizadas simplemente no poseen el suficiente poder predictivo para proporcionar un resultado que se ajuste a las necesidades del negocio, debemos tener cuidado con no caer en el sobre entrenamiento de los modelos. 
+
+  - Durante el desarrollo de los proyectos, pueden surgir hipotesis que es importante validar para robustecer los resultados finales.
+  
+  - Al poner a competir diferentes modelos es importante considerar el ajuste de los hiperparametros de cada uno, para obtener sus mejores resultados.
+  
+  - En el mundo del modelado no existen malos resultados sino que en ocaciones la información disponible o analizada no permite obtener un resultado que sea satisfactorio para las necesitadas del negocio. 
+
+</div>
+
+
+
+
+
+
+
